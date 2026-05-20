@@ -1,0 +1,35 @@
+// ============================================================
+// ★ フォールバック DB
+//   GitHub未設定・オフライン時に使用するローカルデータ
+// ============================================================
+export const FALLBACK_DB = {
+  words: [
+    { id: "w001", word: "花",    reading: "はな",       meaning: "植物の美しい部分",               charCount: 1 },
+    { id: "w002", word: "鼻",    reading: "はな",       meaning: "顔の真ん中にある嗅覚器官",       charCount: 1 },
+    { id: "w003", word: "橋",    reading: "はし",       meaning: "川や谷を渡るための構造物",       charCount: 1 },
+    { id: "w004", word: "箸",    reading: "はし",       meaning: "食事に使う細長い道具（2本1組）", charCount: 1 },
+    { id: "w005", word: "雨",    reading: "あめ",       meaning: "空から降ってくる水の粒",         charCount: 1 },
+    { id: "w006", word: "飴",    reading: "あめ",       meaning: "甘い砂糖菓子",                   charCount: 1 },
+    { id: "w007", word: "登山",  reading: "とざん",     meaning: "山の頂上を目指す活動",           charCount: 2 },
+    { id: "w008", word: "ロマン",reading: "ろまん",     meaning: "夢や浪漫的な感情",               charCount: 3 },
+    { id: "w009", word: "ご飯",  reading: "ごはん",     meaning: "炊いた米・食事のこと",           charCount: 2 },
+    { id: "w010", word: "花火",  reading: "はなび",     meaning: "夜空を彩る光の爆発",             charCount: 2 },
+    { id: "w011", word: "水晶",  reading: "すいしょう", meaning: "透明な鉱物・クリスタル",         charCount: 4 },
+    { id: "w012", word: "推奨",  reading: "すいしょう", meaning: "強くすすめること",               charCount: 4 },
+    { id: "w013", word: "機能",  reading: "きのう",     meaning: "物の働き・役割",                 charCount: 2 },
+    { id: "w014", word: "昨日",  reading: "きのう",     meaning: "今日の前の日",                   charCount: 2 },
+    { id: "w015", word: "科学",  reading: "かがく",     meaning: "自然現象を体系的に研究する学問", charCount: 2 },
+    { id: "w016", word: "化学",  reading: "かがく",     meaning: "物質の性質や変化を研究する学問", charCount: 2 },
+    { id: "w017", word: "時代",  reading: "じだい",     meaning: "歴史上のある期間",               charCount: 2 },
+    { id: "w018", word: "事態",  reading: "じたい",     meaning: "物事の状況・成り行き",           charCount: 2 },
+    { id: "w019", word: "新幹線",reading: "しんかんせん",meaning: "日本の高速鉄道",               charCount: 5 },
+    { id: "w020", word: "スーパー",reading:"すーぱー",  meaning: "食料品などを売る大型店",         charCount: 4 },
+    { id: "w021", word: "観光",  reading: "かんこう",   meaning: "景色や名所を見て回ること",       charCount: 3 },
+    { id: "w022", word: "刊行",  reading: "かんこう",   meaning: "本や雑誌を出版すること",         charCount: 3 },
+    { id: "w023", word: "感光",  reading: "かんこう",   meaning: "光に反応すること",               charCount: 3 },
+    { id: "w024", word: "銀河",  reading: "ぎんが",     meaning: "無数の星が集まった宇宙の大集団", charCount: 2 },
+    { id: "w025", word: "桜",    reading: "さくら",     meaning: "春に咲く日本を代表する花",       charCount: 3 },
+  ],
+  exhausted: {},
+  updatedAt: new Date().toISOString(),
+};
