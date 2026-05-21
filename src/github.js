@@ -1,8 +1,9 @@
 // ============================================================
-// GitHub REST API でのDB読み書き
+// GitHub REST API — DB読み書き
 // ============================================================
-// GITHUB_OWNER / GITHUB_REPO はビルド時に環境変数から注入される
-// VITE_GITHUB_OWNER, VITE_GITHUB_REPO → GitHub Actions の secrets/vars から
+// VITE_GITHUB_OWNER / VITE_GITHUB_REPO はビルド時に Actions から注入
+// database.json は公開リポジトリなのでトークンなしで読み取り可能
+// 書き込みだけ PAT が必要（TitleScreen の任意入力）
 // ============================================================
 
 export const GH_OWNER = import.meta.env.VITE_GITHUB_OWNER || "";
@@ -18,17 +19,13 @@ function ghHeaders(token) {
   };
 }
 
-/**
- * GitHubからdatabase.jsonを取得する
- * トークンなし → 公開リポジトリなら読み取りのみ可
- * @param {string} token  GitHub PAT（読み取り専用でも可）
- */
-export async function fetchDB(token) {
-  const headers = token ? ghHeaders(token) : { "Accept": "application/vnd.github+json" };
+/** トークンなしで公開リポジトリの database.json を読む */
+export async function fetchDB() {
+  if (!GH_OWNER || !GH_REPO) return { db: null, sha: null, error: "repo未設定" };
   try {
     const res = await fetch(
       `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${DB_PATH}?ref=${BRANCH}`,
-      { headers }
+      { headers: { "Accept": "application/vnd.github+json" } }
     );
     if (!res.ok) return { db: null, sha: null, error: `HTTP ${res.status}` };
     const json = await res.json();
@@ -39,15 +36,10 @@ export async function fetchDB(token) {
   }
 }
 
-/**
- * database.jsonをGitHubに書き込む
- * @param {object} db     保存するDBオブジェクト
- * @param {string} sha    現在のファイルSHA（更新時に必要）
- * @param {string} token  GitHub PAT（write権限必須）
- * @returns {{ sha: string|null, error: string|null }}
- */
+/** PAT を使って database.json を書き込む */
 export async function saveDB(db, sha, token) {
-  if (!token) return { sha: null, error: "トークンが設定されていません" };
+  if (!token)                return { sha: null, error: "トークンが未入力です" };
+  if (!GH_OWNER || !GH_REPO) return { sha: null, error: "リポジトリが未設定です" };
   try {
     const content = btoa(unescape(encodeURIComponent(JSON.stringify(db, null, 2))));
     const body = {

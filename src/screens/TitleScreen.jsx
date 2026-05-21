@@ -2,31 +2,43 @@ import { useState } from "react";
 import { C, FM, FD, GLOBAL_STYLE, Btn, Card, Lbl, Tag, inp } from "../design.js";
 import { getVowels, countKana, isSameVowel } from "../vowels.js";
 import { aiGenerateHomovowels } from "../gemini.js";
-import { saveDB } from "../github.js";
+import { saveDB, GH_OWNER, GH_REPO } from "../github.js";
 import { AI_CONFIG } from "../config.js";
 
 function generateId() {
   return "w" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 }
 
-export default function TitleScreen({ onStart, onWordList, db, sha, token, onDbUpdate }) {
-  const [players, setPlayers] = useState([{ name: "プレイヤー1" }]);
-  const [rounds, setRounds] = useState(3);
-  const [topicWord, setTopicWord] = useState("");
+export default function TitleScreen({
+  onStart, onWordList,
+  db, sha, token, onTokenChange, onDbUpdate,
+}) {
+  const [players, setPlayers]       = useState([{ name: "プレイヤー1" }]);
+  const [rounds, setRounds]         = useState(3);
+  const [topicWord, setTopicWord]   = useState("");
   const [topicReading, setTopicReading] = useState("");
   const [topicMeaning, setTopicMeaning] = useState("");
   const [generating, setGenerating] = useState(false);
-  const [genLog, setGenLog] = useState("");
-  const [errors, setErrors] = useState({});
+  const [genLog, setGenLog]         = useState("");
+  const [errors, setErrors]         = useState({});
+  const [showPat, setShowPat]       = useState(false);   // PAT入力欄の開閉
+  const [patInput, setPatInput]     = useState(token);
 
-  const addPlayer = () => { if (players.length < 6) setPlayers(p => [...p, { name: `プレイヤー${p.length + 1}` }]); };
+  const ghReady = !!(GH_OWNER && GH_REPO);
+
+  const addPlayer    = () => { if (players.length < 6) setPlayers(p => [...p, { name: `プレイヤー${p.length + 1}` }]); };
   const removePlayer = (i) => { if (players.length > 1) setPlayers(p => p.filter((_, idx) => idx !== i)); };
   const updatePlayer = (i, v) => setPlayers(p => p.map((x, idx) => idx === i ? { ...x, name: v } : x));
+
+  const applyPat = () => {
+    onTokenChange(patInput.trim());
+    setShowPat(false);
+  };
 
   const prepareAndStart = async () => {
     const errs = {};
     players.forEach((p, i) => { if (!p.name.trim()) errs[`p${i}`] = true; });
-    if (!topicWord.trim()) errs.tw = true;
+    if (!topicWord.trim())    errs.tw = true;
     if (!topicReading.trim()) errs.tr = true;
     if (!topicMeaning.trim()) errs.tm = true;
     setErrors(errs);
@@ -34,7 +46,6 @@ export default function TitleScreen({ onStart, onWordList, db, sha, token, onDbU
 
     setGenerating(true);
 
-    // DBのディープコピーで作業
     let currentDb = {
       ...db,
       words: [...(db.words || [])],
@@ -62,7 +73,7 @@ export default function TitleScreen({ onStart, onWordList, db, sha, token, onDbU
 
     if (needMore) {
       const needed = AI_CONFIG.GENERATE_TARGET - existing.length;
-      setGenLog(`同母音語を AI が追加生成中... (残り${needed}語)`);
+      setGenLog(`AI が同母音語を生成中... (${needed}語追加予定)`);
       const result = await aiGenerateHomovowels(topicReading, topicWord, existing, needed);
 
       if (result.words?.length > 0) {
@@ -75,14 +86,14 @@ export default function TitleScreen({ onStart, onWordList, db, sha, token, onDbU
             });
           }
         });
-        setGenLog(`${result.words.length} 語追加しました`);
+        setGenLog(`${result.words.length}語追加しました`);
       }
       if (result.exhausted) {
         currentDb.exhausted[vowelPat] = true;
-        setGenLog("この母音パターンの単語は網羅されました（上限を記録）");
+        setGenLog("この母音パターンの単語は網羅されました");
       }
 
-      // GitHub に保存
+      // トークンがある場合のみGitHubに保存
       if (token) {
         currentDb.updatedAt = new Date().toISOString();
         const { sha: newSha } = await saveDB(currentDb, sha, token);
@@ -91,10 +102,8 @@ export default function TitleScreen({ onStart, onWordList, db, sha, token, onDbU
         onDbUpdate(currentDb, sha);
       }
     } else {
-      setGenLog(isExhausted
-        ? "上限記録済み — 既存データを使用します"
-        : `DB内 ${existing.length}語 ✓ — AI生成スキップ`);
-      await new Promise(r => setTimeout(r, 500));
+      setGenLog(isExhausted ? "上限記録済み — 既存データを使用" : `DB内 ${existing.length}語 ✓`);
+      await new Promise(r => setTimeout(r, 400));
     }
 
     const pool = currentDb.words.filter(w =>
@@ -103,11 +112,7 @@ export default function TitleScreen({ onStart, onWordList, db, sha, token, onDbU
     );
 
     setGenerating(false);
-    onStart({
-      players, rounds,
-      topic: { word: topicWord, reading: topicReading, meaning: topicMeaning },
-      pool,
-    });
+    onStart({ players, rounds, topic: { word: topicWord, reading: topicReading, meaning: topicMeaning }, pool });
   };
 
   const vowelPreview = topicReading ? getVowels(topicReading) : "";
@@ -120,19 +125,19 @@ export default function TitleScreen({ onStart, onWordList, db, sha, token, onDbU
     <div style={{ minHeight: "100vh", background: C.black, padding: "32px 16px" }}>
       <style>{GLOBAL_STYLE}</style>
 
-      {/* タイトル */}
+      {/* ── タイトル ── */}
       <div style={{ textAlign: "center", marginBottom: "32px" }}>
         <div style={{ fontFamily: FD, fontSize: "clamp(4rem,12vw,9rem)", color: C.yellow, lineHeight: 0.88 }}>同母音</div>
         <div style={{ fontFamily: FD, fontSize: "clamp(1.3rem,4.5vw,3rem)", color: C.white, letterSpacing: "0.12em" }}>HOMOVOWEL GAME</div>
         <div style={{ display: "flex", gap: "8px", justifyContent: "center", marginTop: "10px", flexWrap: "wrap" }}>
           <Tag>同じ母音パターンの異義語を当てろ！</Tag>
-          <Tag bg={token ? C.green : C.gray}>{token ? "GitHub DB 接続中" : "オフラインモード"}</Tag>
+          <Tag bg={token ? C.green : C.gray}>{token ? "DB書き込み可" : "読み取り専用"}</Tag>
         </div>
       </div>
 
       <div style={{ maxWidth: "640px", margin: "0 auto" }}>
 
-        {/* お題単語入力 */}
+        {/* ── お題単語入力 ── */}
         <Card bg={C.white} sh={C.red}>
           <Lbl>◆ お題単語を入力</Lbl>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "10px" }}>
@@ -154,14 +159,14 @@ export default function TitleScreen({ onStart, onWordList, db, sha, token, onDbU
               <Tag>母音: {vowelPreview.toUpperCase()}</Tag>
               <Tag bg={C.gray}>{countKana(topicReading)}音節</Tag>
               <Tag bg={dbCount >= AI_CONFIG.GENERATE_TARGET ? C.green : dbCount > 0 ? C.yellow : C.gray}>
-                DB: {dbCount}語 {dbCount >= AI_CONFIG.GENERATE_TARGET ? "✓" : `(不足 → AI生成: ${AI_CONFIG.GENERATE_TARGET - dbCount}語)`}
+                DB: {dbCount}語{dbCount < AI_CONFIG.GENERATE_TARGET && !isExhausted ? ` → AI生成: ${AI_CONFIG.GENERATE_TARGET - dbCount}語` : " ✓"}
               </Tag>
               {isExhausted && <Tag bg={C.red}>上限記録済み</Tag>}
             </div>
           )}
         </Card>
 
-        {/* ラウンド数 */}
+        {/* ── ラウンド数 ── */}
         <Card>
           <Lbl>◆ ラウンド数: {rounds}回</Lbl>
           <input type="range" min="1" max="10" value={rounds} onChange={e => setRounds(Number(e.target.value))} style={{ width: "100%", accentColor: C.yellow, height: "8px" }} />
@@ -172,7 +177,7 @@ export default function TitleScreen({ onStart, onWordList, db, sha, token, onDbU
           </div>
         </Card>
 
-        {/* プレイヤー設定 */}
+        {/* ── プレイヤー設定 ── */}
         <Card>
           <Lbl>◆ プレイヤー設定 ({players.length}人)</Lbl>
           {players.map((p, i) => (
@@ -185,15 +190,15 @@ export default function TitleScreen({ onStart, onWordList, db, sha, token, onDbU
           {players.length < 6 && <Btn bg={C.darkGray} fg={C.yellow} size="sm" onClick={addPlayer}>＋ 追加</Btn>}
         </Card>
 
-        {/* AI生成ログ */}
+        {/* ── AI生成ログ ── */}
         {generating && (
           <div style={{ background: C.darkGray, border: `3px solid ${C.yellow}`, padding: "14px 18px", marginBottom: "14px" }} className="blink">
             <div style={{ color: C.yellow, fontWeight: "700" }}>🤖 {genLog || "処理中..."}</div>
           </div>
         )}
 
-        {/* ボタン */}
-        <div style={{ display: "flex", gap: "10px" }}>
+        {/* ── ゲームスタート & 単語リストボタン ── */}
+        <div style={{ display: "flex", gap: "10px", marginBottom: "12px" }}>
           <div style={{ flex: 1 }}>
             <Btn bg={C.yellow} fg={C.black} sh={C.red} size="lg" full onClick={prepareAndStart} disabled={generating}>
               {generating ? "準備中..." : "ゲームスタート →"}
@@ -201,7 +206,41 @@ export default function TitleScreen({ onStart, onWordList, db, sha, token, onDbU
           </div>
           <Btn bg={C.blue} fg={C.white} size="lg" onClick={onWordList} title="単語リスト管理">📚</Btn>
         </div>
-        <div style={{ marginTop: "6px", fontSize: "0.72rem", color: C.midGray, textAlign: "right" }}>
+
+        {/* ── DB書き込み用PAT（折りたたみ式、任意） ── */}
+        {ghReady && (
+          <div style={{ marginTop: "4px" }}>
+            <button
+              style={{ background: "none", border: "none", color: C.midGray, fontSize: "0.75rem", cursor: "pointer", textDecoration: "underline", padding: "4px 0", fontFamily: FM }}
+              onClick={() => setShowPat(v => !v)}
+            >
+              {showPat ? "▲ DB書き込み設定を閉じる" : "▼ 新単語をDBに保存したい場合（GitHub PAT）"}
+            </button>
+            {showPat && (
+              <div style={{ background: C.darkGray, border: `2px solid ${C.midGray}`, padding: "14px 16px", marginTop: "6px" }}>
+                <Lbl>GitHub Personal Access Token（repo スコープ）</Lbl>
+                <div style={{ display: "flex", gap: "8px", marginBottom: "8px" }}>
+                  <input
+                    type="password"
+                    style={{ ...inp(), flex: 1 }}
+                    placeholder="ghp_xxxxxxxxxxxx（任意）"
+                    value={patInput}
+                    onChange={e => setPatInput(e.target.value)}
+                    autoComplete="off"
+                  />
+                  <Btn bg={C.green} fg={C.black} size="sm" onClick={applyPat}>適用</Btn>
+                </div>
+                <div style={{ fontSize: "0.72rem", color: C.gray, lineHeight: 1.6 }}>
+                  未入力でもゲームは遊べます。入力するとAIが生成した新単語をGitHubに自動保存します。<br />
+                  取得: GitHub → Settings → Developer settings → Personal access tokens → <strong>repo</strong> スコープ
+                </div>
+                {token && <div style={{ marginTop: "6px", fontSize: "0.75rem", color: C.green, fontWeight: "700" }}>✓ PAT設定済み（書き込み可）</div>}
+              </div>
+            )}
+          </div>
+        )}
+
+        <div style={{ marginTop: "8px", fontSize: "0.72rem", color: C.midGray, textAlign: "right" }}>
           📚 = 単語リスト管理
         </div>
       </div>
