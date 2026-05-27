@@ -1,13 +1,787 @@
 <!DOCTYPE html>
 <html lang="ja">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>同母音異義語ゲーム</title>
-    <meta name="description" content="同じ母音パターンを持つ異義語を当てるゲーム" />
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>同母音異義語ゲーム</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Bebas+Neue&display=swap');
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html,body,#root{min-height:100vh}
+    body{background:#0a0a0a;color:#f2f0e8;font-family:'Space Mono','Courier New',monospace;overflow-x:hidden}
+    input,textarea,button,select{font-family:'Space Mono','Courier New',monospace}
+    ::selection{background:#FFE234;color:#0a0a0a}
+    ::-webkit-scrollbar{width:8px}
+    ::-webkit-scrollbar-track{background:#0a0a0a}
+    ::-webkit-scrollbar-thumb{background:#FFE234;border:2px solid #0a0a0a}
+    @keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes blink{0%,100%{opacity:1}50%{opacity:0.35}}
+    .fu{animation:fadeUp .22s ease both}
+    .blink{animation:blink 1.1s ease infinite}
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+<script type="text/babel">
+// ═══════════════════════════════════════════════════════════════
+// ★ 設定 — ここを編集してください ★
+// ═══════════════════════════════════════════════════════════════
+
+// Gemini API キー (Google AI Studio で取得)
+// https://aistudio.google.com/
+const GEMINI_KEY = "";  // ← ここにキーを貼る
+
+// GitHub DB設定（任意 — 空欄でもゲームは動きます）
+const GH_OWNER = "";   // GitHubユーザー名
+const GH_REPO  = "";   // リポジトリ名
+const GH_BRANCH = "main";
+const DB_PATH  = "database.json";
+
+// AI設定
+const GENERATE_TARGET = 20;  // 1母音パターンに必要な最低単語数
+const GEMINI_MODEL = "gemini-2.0-flash";
+
+// ═══════════════════════════════════════════════════════════════
+// デザイントークン
+// ═══════════════════════════════════════════════════════════════
+const C = {
+  black:"#0a0a0a", white:"#f2f0e8",
+  yellow:"#FFE234", red:"#FF2D2D",
+  blue:"#0000EE", gray:"#c0beb6",
+  darkGray:"#282826", midGray:"#777770", green:"#00BB44",
+};
+const FD = "'Bebas Neue','Impact',sans-serif";
+const FM = "'Space Mono','Courier New',monospace";
+
+// ═══════════════════════════════════════════════════════════════
+// フォールバックDB
+// ═══════════════════════════════════════════════════════════════
+const FALLBACK_DB = {
+  words:[
+    {id:"w001",word:"花",reading:"はな",meaning:"植物の美しい部分",charCount:1},
+    {id:"w002",word:"鼻",reading:"はな",meaning:"顔の真ん中にある嗅覚器官",charCount:1},
+    {id:"w003",word:"橋",reading:"はし",meaning:"川や谷を渡るための構造物",charCount:1},
+    {id:"w004",word:"箸",reading:"はし",meaning:"食事に使う細長い道具（2本1組）",charCount:1},
+    {id:"w005",word:"雨",reading:"あめ",meaning:"空から降ってくる水の粒",charCount:1},
+    {id:"w006",word:"飴",reading:"あめ",meaning:"甘い砂糖菓子",charCount:1},
+    {id:"w007",word:"登山",reading:"とざん",meaning:"山の頂上を目指す活動",charCount:2},
+    {id:"w008",word:"ロマン",reading:"ろまん",meaning:"夢や浪漫的な感情",charCount:3},
+    {id:"w009",word:"ご飯",reading:"ごはん",meaning:"炊いた米・食事のこと",charCount:2},
+    {id:"w010",word:"花火",reading:"はなび",meaning:"夜空を彩る光の爆発",charCount:2},
+    {id:"w011",word:"水晶",reading:"すいしょう",meaning:"透明な鉱物・クリスタル",charCount:4},
+    {id:"w012",word:"推奨",reading:"すいしょう",meaning:"強くすすめること",charCount:4},
+    {id:"w013",word:"機能",reading:"きのう",meaning:"物の働き・役割",charCount:2},
+    {id:"w014",word:"昨日",reading:"きのう",meaning:"今日の前の日",charCount:2},
+    {id:"w015",word:"科学",reading:"かがく",meaning:"自然現象を体系的に研究する学問",charCount:2},
+    {id:"w016",word:"化学",reading:"かがく",meaning:"物質の性質や変化を研究する学問",charCount:2},
+    {id:"w017",word:"時代",reading:"じだい",meaning:"歴史上のある期間",charCount:2},
+    {id:"w018",word:"事態",reading:"じたい",meaning:"物事の状況・成り行き",charCount:2},
+    {id:"w019",word:"新幹線",reading:"しんかんせん",meaning:"日本の高速鉄道",charCount:5},
+    {id:"w020",word:"スーパー",reading:"すーぱー",meaning:"食料品などを売る大型店",charCount:4},
+    {id:"w021",word:"観光",reading:"かんこう",meaning:"景色や名所を見て回ること",charCount:3},
+    {id:"w022",word:"刊行",reading:"かんこう",meaning:"本や雑誌を出版すること",charCount:3},
+    {id:"w023",word:"感光",reading:"かんこう",meaning:"光に反応すること",charCount:3},
+    {id:"w024",word:"銀河",reading:"ぎんが",meaning:"無数の星が集まった宇宙の大集団",charCount:2},
+    {id:"w025",word:"桜",reading:"さくら",meaning:"春に咲く日本を代表する花",charCount:3},
+  ],
+  exhausted:{},
+  updatedAt:new Date().toISOString(),
+};
+
+// ═══════════════════════════════════════════════════════════════
+// 母音変換
+// ═══════════════════════════════════════════════════════════════
+const KR = {
+  あ:"a",い:"i",う:"u",え:"e",お:"o",ア:"a",イ:"i",ウ:"u",エ:"e",オ:"o",
+  か:"ka",き:"ki",く:"ku",け:"ke",こ:"ko",カ:"ka",キ:"ki",ク:"ku",ケ:"ke",コ:"ko",
+  さ:"sa",し:"si",す:"su",せ:"se",そ:"so",サ:"sa",シ:"si",ス:"su",セ:"se",ソ:"so",
+  た:"ta",ち:"ti",つ:"tu",て:"te",と:"to",タ:"ta",チ:"ti",ツ:"tu",テ:"te",ト:"to",
+  な:"na",に:"ni",ぬ:"nu",ね:"ne",の:"no",ナ:"na",ニ:"ni",ヌ:"nu",ネ:"ne",ノ:"no",
+  は:"ha",ひ:"hi",ふ:"hu",へ:"he",ほ:"ho",ハ:"ha",ヒ:"hi",フ:"hu",ヘ:"he",ホ:"ho",
+  ま:"ma",み:"mi",む:"mu",め:"me",も:"mo",マ:"ma",ミ:"mi",ム:"mu",メ:"me",モ:"mo",
+  や:"ya",ゆ:"yu",よ:"yo",ヤ:"ya",ユ:"yu",ヨ:"yo",
+  ら:"ra",り:"ri",る:"ru",れ:"re",ろ:"ro",ラ:"ra",リ:"ri",ル:"ru",レ:"re",ロ:"ro",
+  わ:"wa",を:"o",ん:"n",ワ:"wa",ヲ:"o",ン:"n",
+  が:"ga",ぎ:"gi",ぐ:"gu",げ:"ge",ご:"go",ガ:"ga",ギ:"gi",グ:"gu",ゲ:"ge",ゴ:"go",
+  ざ:"za",じ:"zi",ず:"zu",ぜ:"ze",ぞ:"zo",ザ:"za",ジ:"zi",ズ:"zu",ゼ:"ze",ゾ:"zo",
+  だ:"da",ぢ:"di",づ:"du",で:"de",ど:"do",ダ:"da",ヂ:"di",ヅ:"du",デ:"de",ド:"do",
+  ば:"ba",び:"bi",ぶ:"bu",べ:"be",ぼ:"bo",バ:"ba",ビ:"bi",ブ:"bu",ベ:"be",ボ:"bo",
+  ぱ:"pa",ぴ:"pi",ぷ:"pu",ぺ:"pe",ぽ:"po",パ:"pa",ピ:"pi",プ:"pu",ペ:"pe",ポ:"po",
+  きゃ:"kya",きゅ:"kyu",きょ:"kyo",しゃ:"sya",しゅ:"syu",しょ:"syo",
+  ちゃ:"tya",ちゅ:"tyu",ちょ:"tyo",にゃ:"nya",にゅ:"nyu",にょ:"nyo",
+  ひゃ:"hya",ひゅ:"hyu",ひょ:"hyo",みゃ:"mya",みゅ:"myu",みょ:"myo",
+  りゃ:"rya",りゅ:"ryu",りょ:"ryo",ぎゃ:"gya",ぎゅ:"gyu",ぎょ:"gyo",
+  じゃ:"zya",じゅ:"zyu",じょ:"zyo",びゃ:"bya",びゅ:"byu",びょ:"byo",
+  ぴゃ:"pya",ぴゅ:"pyu",ぴょ:"pyo",
+  キャ:"kya",キュ:"kyu",キョ:"kyo",シャ:"sya",シュ:"syu",ショ:"syo",
+  チャ:"tya",チュ:"tyu",チョ:"tyo",ニャ:"nya",ニュ:"nyu",ニョ:"nyo",
+  ヒャ:"hya",ヒュ:"hyu",ヒョ:"hyo",ミャ:"mya",ミュ:"myu",ミョ:"myo",
+  リャ:"rya",リュ:"ryu",リョ:"ryo",ギャ:"gya",ギュ:"gyu",ギョ:"gyo",
+  ジャ:"zya",ジュ:"zyu",ジョ:"zyo",ビャ:"bya",ビュ:"byu",ビョ:"byo",
+  ピャ:"pya",ピュ:"pyu",ピョ:"pyo",
+  ファ:"fa",フィ:"fi",フェ:"fe",フォ:"fo",ヴ:"vu",
+};
+
+function getVowels(reading){
+  const chars=[...reading]; let r="",prev="",i=0;
+  while(i<chars.length){
+    const ch=chars[i];
+    if(ch==="ー"||ch==="―"){r+=prev;i++;continue;}
+    if(i+1<chars.length){const two=ch+chars[i+1];if(KR[two]){const v=KR[two].slice(-1);r+=v;prev=v;i+=2;continue;}}
+    const rom=KR[ch];
+    if(rom){if(rom==="n"){r+="n";prev="n";i++;continue;}const v=rom.slice(-1);r+=v;prev=v;}
+    i++;
+  }
+  return r;
+}
+function isSameVowel(a,b){return getVowels(a)===getVowels(b);}
+function countKana(reading){
+  const chars=[...reading];let c=0,i=0;
+  while(i<chars.length){
+    const ch=chars[i];
+    if(ch==="ー"||ch==="―"){i++;continue;}
+    if(i+1<chars.length&&KR[ch+chars[i+1]]){c++;i+=2;}
+    else{if(KR[ch]||/[ぁ-んァ-ン]/.test(ch))c++;i++;}
+  }
+  return c;
+}
+function generateId(){return "w"+Date.now().toString(36)+Math.random().toString(36).slice(2,6);}
+
+// ═══════════════════════════════════════════════════════════════
+// GitHub API
+// ═══════════════════════════════════════════════════════════════
+async function fetchDB(){
+  if(!GH_OWNER||!GH_REPO) return {db:null,sha:null};
+  try{
+    const res=await fetch(`https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${DB_PATH}?ref=${GH_BRANCH}`,
+      {headers:{"Accept":"application/vnd.github+json"}});
+    if(!res.ok) return {db:null,sha:null};
+    const json=await res.json();
+    return {db:JSON.parse(atob(json.content.replace(/\n/g,""))),sha:json.sha};
+  }catch{return {db:null,sha:null};}
+}
+async function saveDB(db,sha,token){
+  if(!token||!GH_OWNER||!GH_REPO) return null;
+  try{
+    const content=btoa(unescape(encodeURIComponent(JSON.stringify(db,null,2))));
+    const body={message:`chore: update database [${new Date().toISOString()}]`,content,branch:GH_BRANCH};
+    if(sha) body.sha=sha;
+    const res=await fetch(`https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${DB_PATH}`,
+      {method:"PUT",headers:{"Authorization":`Bearer ${token}`,"Content-Type":"application/json","Accept":"application/vnd.github+json"},
+       body:JSON.stringify(body)});
+    if(!res.ok) return null;
+    const json=await res.json();
+    return json.content?.sha||sha;
+  }catch{return null;}
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Gemini API
+// ═══════════════════════════════════════════════════════════════
+async function callGemini(prompt,maxTokens=2000){
+  if(!GEMINI_KEY) throw new Error("APIキー未設定");
+  const url=`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_KEY}`;
+  const res=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{maxOutputTokens:maxTokens,temperature:0.7}})});
+  if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(e?.error?.message||`HTTP ${res.status}`);}
+  const data=await res.json();
+  return data.candidates?.[0]?.content?.parts?.[0]?.text||"";
+}
+
+async function aiGenerateHomovowels(targetReading,targetWord,existing,needed){
+  const vp=getVowels(targetReading);
+  const el=existing.map(e=>`${e.word}（${e.reading}）`).join("、");
+  const prompt=`あなたは日本語の同母音異義語の専門家です。以下の条件で単語を${needed}個生成してください。
+■母音パターン:${vp.toUpperCase()} ■お題単語:${targetWord}（${targetReading}）
+■既存リスト（重複禁止）:${el||"なし"}
+■同母音の定義:伸ばし棒（ー）は直前の母音を繰り返す。拗音は1音節（しゃ→ya）。
+例:「登山」tozan→oan/「ロマン」roman→oan←同じ！
+■必須:母音パターン完全一致・2〜6音節の実在する日本語・重複なし・意味30文字以内
+■出力形式（JSONのみ。前置き・コードブロック不要）:
+{"words":[{"word":"表記","reading":"よみがな","meaning":"説明"}],"exhausted":false}
+これ以上存在しない場合:{"words":[],"exhausted":true}`;
+  try{
+    const text=await callGemini(prompt,2000);
+    return JSON.parse(text.replace(/```json|```/g,"").trim());
+  }catch{return {words:[],exhausted:false};}
+}
+
+async function aiGenerateHint(answerWord,answerReading){
+  const prompt=`単語「${answerWord}」（${answerReading}）の意味を、その単語自体や読み方を一切使わずに30文字以内で説明してください。意味の説明文のみ回答。`;
+  try{
+    const text=await callGemini(prompt,200);
+    return text.trim()||`${answerWord}に関するもの`;
+  }catch{return `${answerWord}に関するもの`;}
+}
+
+// ═══════════════════════════════════════════════════════════════
+// UI部品
+// ═══════════════════════════════════════════════════════════════
+const {useState,useEffect,useRef}=React;
+
+function Btn({bg=C.yellow,fg=C.black,sh=C.black,children,onClick,disabled,full,size="md"}){
+  const [hov,setHov]=useState(false);
+  const pad=size==="lg"?"15px 28px":size==="sm"?"7px 14px":"11px 22px";
+  const fs=size==="lg"?"1.15rem":size==="sm"?"0.82rem":"0.95rem";
+  return <button
+    style={{background:bg,color:fg,border:`3px solid ${C.black}`,
+      boxShadow:hov&&!disabled?`2px 2px 0 ${sh}`:`5px 5px 0 ${sh}`,
+      transform:hov&&!disabled?"translate(3px,3px)":"none",
+      padding:pad,fontSize:fs,fontWeight:"700",fontFamily:FM,
+      cursor:disabled?"not-allowed":"pointer",textTransform:"uppercase",
+      letterSpacing:"0.05em",userSelect:"none",transition:"box-shadow .1s,transform .1s",
+      opacity:disabled?0.45:1,width:full?"100%":"auto"}}
+    onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
+    onClick={!disabled?onClick:undefined}>{children}</button>;
+}
+
+function Card({bg=C.white,sh=C.yellow,children,style={}}){
+  return <div style={{background:bg,color:(bg===C.black||bg===C.darkGray)?C.white:C.black,
+    border:`3px solid ${C.black}`,boxShadow:`8px 8px 0 ${sh}`,
+    padding:"20px 22px",marginBottom:"16px",...style}}>{children}</div>;
+}
+function Lbl({children}){
+  return <div style={{fontSize:"0.72rem",fontWeight:"700",textTransform:"uppercase",
+    letterSpacing:"0.1em",color:C.midGray,marginBottom:"6px"}}>{children}</div>;
+}
+function Tag({children,bg=C.yellow}){
+  return <span style={{background:bg,color:C.black,border:`2px solid ${C.black}`,
+    padding:"2px 9px",fontSize:"0.75rem",fontWeight:"700",display:"inline-block"}}>{children}</span>;
+}
+const inp=(err=false)=>({background:C.white,color:C.black,
+  border:`3px solid ${err?C.red:C.black}`,boxShadow:`4px 4px 0 ${err?C.red:C.yellow}`,
+  padding:"10px 14px",fontSize:"1rem",fontFamily:FM,outline:"none",width:"100%"});
+
+// ═══════════════════════════════════════════════════════════════
+// WordListScreen
+// ═══════════════════════════════════════════════════════════════
+function WordListScreen({db,sha,token,onSave,onBack}){
+  const [words,setWords]=useState([...(db.words||[])]);
+  const [kw,setKw]=useState(""); const [fChars,setFChars]=useState("all"); const [fVowel,setFVowel]=useState("");
+  const [editId,setEditId]=useState(null); const [editData,setEditData]=useState({});
+  const [saving,setSaving]=useState(false); const [saveMsg,setSaveMsg]=useState(null);
+  const [addMode,setAddMode]=useState(false); const [nw,setNw]=useState({word:"",reading:"",meaning:""});
+
+  const filtered=words.filter(w=>{
+    const k=kw.trim().toLowerCase();
+    const km=!k||w.word.includes(k)||w.reading.includes(k)||w.meaning.includes(k);
+    const cm=fChars==="all"||String(countKana(w.reading))===fChars;
+    const fv=fVowel.trim();
+    const vm=!fv||getVowels(w.reading)===getVowels(fv)||getVowels(w.reading)===fv.toLowerCase();
+    return km&&cm&&vm;
+  });
+
+  const startEdit=w=>{setEditId(w.id);setEditData({word:w.word,reading:w.reading,meaning:w.meaning});};
+  const saveEdit=id=>{setWords(ws=>ws.map(w=>w.id===id?{...w,...editData,charCount:countKana(editData.reading)}:w));setEditId(null);};
+  const deleteWord=id=>{if(window.confirm("この単語を削除しますか？"))setWords(ws=>ws.filter(w=>w.id!==id));};
+  const addWord=()=>{
+    if(!nw.word||!nw.reading||!nw.meaning)return;
+    setWords(ws=>[...ws,{id:generateId(),...nw,charCount:countKana(nw.reading)}]);
+    setNw({word:"",reading:"",meaning:""});setAddMode(false);
+  };
+  const handleSave=async()=>{
+    setSaving(true);setSaveMsg(null);
+    const newDb={...db,words,updatedAt:new Date().toISOString()};
+    const newSha=await onSave(newDb);
+    setSaving(false);
+    setSaveMsg(newSha||!GH_OWNER?{ok:true,text:"✓ 保存しました"}:{ok:false,text:"✗ 保存失敗（トークン要）"});
+    setTimeout(()=>setSaveMsg(null),3000);
+  };
+
+  const vowelMap={};
+  words.forEach(w=>{const v=getVowels(w.reading);vowelMap[v]=(vowelMap[v]||0)+1;});
+  const topVowels=Object.entries(vowelMap).sort((a,b)=>b[1]-a[1]).slice(0,10);
+
+  return <div style={{minHeight:"100vh",background:C.black,padding:"24px 16px"}}>
+    <div style={{maxWidth:"780px",margin:"0 auto"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"20px",borderBottom:`3px solid ${C.yellow}`,paddingBottom:"16px",flexWrap:"wrap",gap:"10px"}}>
+        <div>
+          <div style={{fontFamily:FD,fontSize:"2.5rem",color:C.yellow}}>WORD DATABASE</div>
+          <div style={{color:C.midGray,fontSize:"0.8rem"}}>{words.length}語 登録済み</div>
+        </div>
+        <div style={{display:"flex",gap:"8px",flexWrap:"wrap"}}>
+          {token&&<Btn bg={C.green} fg={C.black} onClick={handleSave} disabled={saving}>{saving?"保存中...":"💾 GitHubに保存"}</Btn>}
+          <Btn bg={C.darkGray} fg={C.white} onClick={onBack}>← 戻る</Btn>
+        </div>
+      </div>
+      {saveMsg&&<div style={{background:saveMsg.ok?C.green:C.red,color:C.black,border:`3px solid ${C.black}`,padding:"10px 16px",marginBottom:"14px",fontWeight:"700"}}>{saveMsg.text}</div>}
+
+      <Card bg={C.darkGray} sh={C.midGray}>
+        <Lbl>◆ 検索・フィルター</Lbl>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:"10px"}}>
+          <div><Lbl>キーワード</Lbl><input style={inp()} placeholder="単語・読み・意味" value={kw} onChange={e=>setKw(e.target.value)}/></div>
+          <div><Lbl>文字数</Lbl>
+            <select style={{...inp(),appearance:"none",cursor:"pointer"}} value={fChars} onChange={e=>setFChars(e.target.value)}>
+              <option value="all">すべて</option>
+              {[1,2,3,4,5,6].map(n=><option key={n} value={String(n)}>{n}文字</option>)}
+            </select>
+          </div>
+          <div><Lbl>母音パターン（例: oan）</Lbl><input style={inp()} placeholder="母音列 or 読みがな" value={fVowel} onChange={e=>setFVowel(e.target.value)}/></div>
+        </div>
+        <div style={{marginTop:"8px",fontSize:"0.78rem",color:C.gray}}>{filtered.length}件 表示中</div>
+      </Card>
+
+      <Card bg={C.darkGray} sh={C.midGray}>
+        <Lbl>◆ 母音パターン別集計（クリックでフィルター）</Lbl>
+        {topVowels.map(([v,cnt])=>(
+          <div key={v} style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"6px"}}>
+            <button style={{background:"none",border:"none",cursor:"pointer",padding:0}} onClick={()=>setFVowel(v)}><Tag bg={C.yellow}>{v.toUpperCase()}</Tag></button>
+            <div style={{flex:1,height:"12px",background:C.black,border:`2px solid ${C.midGray}`,overflow:"hidden"}}>
+              <div style={{width:`${Math.min(100,cnt/GENERATE_TARGET*100)}%`,height:"100%",background:cnt>=GENERATE_TARGET?C.green:C.yellow}}/>
+            </div>
+            <span style={{color:C.white,fontSize:"0.78rem",minWidth:"52px"}}>{cnt}/{GENERATE_TARGET}</span>
+            {db.exhausted?.[v]&&<Tag bg={C.red}>上限</Tag>}
+          </div>
+        ))}
+      </Card>
+
+      <div style={{marginBottom:"14px"}}>
+        {!addMode?<Btn bg={C.yellow} fg={C.black} onClick={()=>setAddMode(true)}>＋ 単語を追加</Btn>
+        :<Card bg={C.white} sh={C.green}>
+          <Lbl>◆ 新規単語追加</Lbl>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px",marginBottom:"10px"}}>
+            <div><Lbl>単語</Lbl><input style={inp()} placeholder="例: 登山" value={nw.word} onChange={e=>setNw(p=>({...p,word:e.target.value}))}/></div>
+            <div><Lbl>読み（仮名）</Lbl><input style={inp()} placeholder="例: とざん" value={nw.reading} onChange={e=>setNw(p=>({...p,reading:e.target.value}))}/></div>
+          </div>
+          <div style={{marginBottom:"10px"}}><Lbl>意味</Lbl><input style={inp()} placeholder="例: 山の頂上を目指す活動" value={nw.meaning} onChange={e=>setNw(p=>({...p,meaning:e.target.value}))}/></div>
+          {nw.reading&&<div style={{marginBottom:"10px",display:"flex",gap:"8px",flexWrap:"wrap"}}><Tag>母音: {getVowels(nw.reading).toUpperCase()}</Tag><Tag bg={C.gray}>{countKana(nw.reading)}音節</Tag></div>}
+          <div style={{display:"flex",gap:"8px"}}>
+            <Btn bg={C.green} fg={C.black} onClick={addWord} disabled={!nw.word||!nw.reading||!nw.meaning}>追加</Btn>
+            <Btn bg={C.gray} fg={C.black} onClick={()=>setAddMode(false)}>キャンセル</Btn>
+          </div>
+        </Card>}
+      </div>
+
+      {filtered.length===0&&<div style={{textAlign:"center",color:C.midGray,padding:"48px",border:`3px dashed ${C.midGray}`}}>該当する単語が見つかりません</div>}
+      {filtered.map(w=>(
+        <div key={w.id} className="fu" style={{background:C.white,border:`3px solid ${C.black}`,boxShadow:`4px 4px 0 ${C.yellow}`,padding:"14px 16px",marginBottom:"10px"}}>
+          {editId===w.id
+            ?<div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px",marginBottom:"8px"}}>
+                <div><Lbl>単語</Lbl><input style={inp()} value={editData.word} onChange={e=>setEditData(p=>({...p,word:e.target.value}))}/></div>
+                <div><Lbl>読み</Lbl><input style={inp()} value={editData.reading} onChange={e=>setEditData(p=>({...p,reading:e.target.value}))}/></div>
+              </div>
+              <div style={{marginBottom:"8px"}}><Lbl>意味</Lbl><input style={inp()} value={editData.meaning} onChange={e=>setEditData(p=>({...p,meaning:e.target.value}))}/></div>
+              {editData.reading&&<div style={{marginBottom:"8px",display:"flex",gap:"8px"}}><Tag>母音: {getVowels(editData.reading).toUpperCase()}</Tag><Tag bg={C.gray}>{countKana(editData.reading)}音節</Tag></div>}
+              <div style={{display:"flex",gap:"8px"}}>
+                <Btn bg={C.green} fg={C.black} size="sm" onClick={()=>saveEdit(w.id)}>保存</Btn>
+                <Btn bg={C.gray} fg={C.black} size="sm" onClick={()=>setEditId(null)}>キャンセル</Btn>
+              </div>
+            </div>
+            :<div style={{display:"flex",gap:"12px",alignItems:"flex-start"}}>
+              <div style={{flex:1}}>
+                <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"4px",flexWrap:"wrap"}}>
+                  <span style={{fontFamily:FD,fontSize:"1.5rem"}}>{w.word}</span>
+                  <span style={{fontSize:"0.85rem",color:C.midGray}}>（{w.reading}）</span>
+                  <Tag bg={C.gray}>{countKana(w.reading)}文字</Tag>
+                  <Tag>{getVowels(w.reading).toUpperCase()}</Tag>
+                </div>
+                <div style={{fontSize:"0.85rem",color:C.darkGray}}>{w.meaning}</div>
+              </div>
+              <div style={{display:"flex",gap:"6px",flexShrink:0}}>
+                <Btn bg={C.blue} fg={C.white} size="sm" onClick={()=>startEdit(w)}>編集</Btn>
+                <Btn bg={C.red} fg={C.white} size="sm" onClick={()=>deleteWord(w.id)}>削除</Btn>
+              </div>
+            </div>
+          }
+        </div>
+      ))}
+    </div>
+  </div>;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TitleScreen
+// ═══════════════════════════════════════════════════════════════
+function TitleScreen({onStart,onWordList,db,sha,token,onTokenChange,onDbUpdate}){
+  const [players,setPlayers]=useState([{name:"プレイヤー1"}]);
+  const [rounds,setRounds]=useState(3);
+  const [topicWord,setTopicWord]=useState("");
+  const [topicReading,setTopicReading]=useState("");
+  const [topicMeaning,setTopicMeaning]=useState("");
+  const [generating,setGenerating]=useState(false);
+  const [genLog,setGenLog]=useState("");
+  const [errors,setErrors]=useState({});
+  const [showPat,setShowPat]=useState(false);
+  const [patInput,setPatInput]=useState(token);
+
+  const addPlayer=()=>{if(players.length<6)setPlayers(p=>[...p,{name:`プレイヤー${p.length+1}`}]);};
+  const removePlayer=i=>{if(players.length>1)setPlayers(p=>p.filter((_,idx)=>idx!==i));};
+  const updatePlayer=(i,v)=>setPlayers(p=>p.map((x,idx)=>idx===i?{...x,name:v}:x));
+  const applyPat=()=>{onTokenChange(patInput.trim());setShowPat(false);};
+
+  const prepareAndStart=async()=>{
+    const errs={};
+    players.forEach((p,i)=>{if(!p.name.trim())errs[`p${i}`]=true;});
+    if(!topicWord.trim())errs.tw=true;
+    if(!topicReading.trim())errs.tr=true;
+    if(!topicMeaning.trim())errs.tm=true;
+    setErrors(errs);
+    if(Object.keys(errs).length>0)return;
+    setGenerating(true);
+
+    let currentDb={...db,words:[...(db.words||[])],exhausted:{...(db.exhausted||{})}};
+    const vowelPat=getVowels(topicReading);
+    const alreadyIn=currentDb.words.find(w=>w.reading===topicReading&&w.word===topicWord);
+    if(!alreadyIn) currentDb.words.push({id:generateId(),word:topicWord,reading:topicReading,meaning:topicMeaning,charCount:countKana(topicReading)});
+
+    const existing=currentDb.words.filter(w=>isSameVowel(w.reading,topicReading)&&!(w.reading===topicReading&&w.word===topicWord));
+    const isExhausted=!!currentDb.exhausted?.[vowelPat];
+    const needMore=existing.length<GENERATE_TARGET&&!isExhausted;
+
+    if(needMore){
+      const needed=GENERATE_TARGET-existing.length;
+      setGenLog(`AI が同母音語を生成中... (${needed}語追加予定)`);
+      if(!GEMINI_KEY){
+        setGenLog("APIキー未設定 — 既存データでゲームを開始します");
+        await new Promise(r=>setTimeout(r,800));
+      } else {
+        const result=await aiGenerateHomovowels(topicReading,topicWord,existing,needed);
+        if(result.words?.length>0){
+          result.words.forEach(w=>{
+            if(!isSameVowel(w.reading,topicReading))return;
+            if(!currentDb.words.find(x=>x.word===w.word&&x.reading===w.reading))
+              currentDb.words.push({id:generateId(),word:w.word,reading:w.reading,meaning:w.meaning,charCount:countKana(w.reading)});
+          });
+          setGenLog(`${result.words.length}語追加しました`);
+        }
+        if(result.exhausted){currentDb.exhausted[vowelPat]=true;setGenLog("この母音パターンは網羅されました");}
+        if(token){
+          currentDb.updatedAt=new Date().toISOString();
+          const newSha=await saveDB(currentDb,sha,token);
+          onDbUpdate(currentDb,newSha||sha);
+        } else onDbUpdate(currentDb,sha);
+      }
+    } else {
+      setGenLog(isExhausted?"上限記録済み — 既存データを使用":`DB内 ${existing.length}語 ✓`);
+      await new Promise(r=>setTimeout(r,400));
+    }
+
+    const pool=currentDb.words.filter(w=>isSameVowel(w.reading,topicReading)&&!(w.reading===topicReading&&w.word===topicWord));
+    setGenerating(false);
+    onStart({players,rounds,topic:{word:topicWord,reading:topicReading,meaning:topicMeaning},pool});
+  };
+
+  const vowelPreview=topicReading?getVowels(topicReading):"";
+  const dbCount=topicReading?(db.words||[]).filter(w=>isSameVowel(w.reading,topicReading)&&!(w.reading===topicReading&&w.word===topicWord)).length:0;
+  const isExhausted=vowelPreview?!!db.exhausted?.[vowelPreview]:false;
+
+  return <div style={{minHeight:"100vh",background:C.black,padding:"32px 16px"}}>
+    <div style={{textAlign:"center",marginBottom:"32px"}}>
+      <div style={{fontFamily:FD,fontSize:"clamp(4rem,12vw,9rem)",color:C.yellow,lineHeight:0.88}}>同母音</div>
+      <div style={{fontFamily:FD,fontSize:"clamp(1.3rem,4.5vw,3rem)",color:C.white,letterSpacing:"0.12em"}}>HOMOVOWEL GAME</div>
+      <div style={{display:"flex",gap:"8px",justifyContent:"center",marginTop:"10px",flexWrap:"wrap"}}>
+        <Tag>同じ母音パターンの異義語を当てろ！</Tag>
+        <Tag bg={GEMINI_KEY?C.green:C.red}>{GEMINI_KEY?"Gemini AI 有効":"⚠ APIキー未設定"}</Tag>
+        <Tag bg={token?C.green:C.gray}>{token?"DB書き込み可":"読み取り専用"}</Tag>
+      </div>
+    </div>
+
+    <div style={{maxWidth:"640px",margin:"0 auto"}}>
+      {!GEMINI_KEY&&<div style={{background:C.red,color:C.white,border:`3px solid ${C.black}`,padding:"12px 16px",marginBottom:"16px",fontWeight:"700",fontSize:"0.85rem"}}>
+        ⚠ GEMINI_KEY が未設定です。index.html の先頭の const GEMINI_KEY = "" にAPIキーを入力してください。<br/>
+        キー未設定でもフォールバックDBで遊べますが、AI生成は動きません。
+      </div>}
+
+      <Card bg={C.white} sh={C.red}>
+        <Lbl>◆ お題単語を入力</Lbl>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px",marginBottom:"10px"}}>
+          <div><Lbl>単語（漢字・仮名）</Lbl><input style={inp(errors.tw)} placeholder="例: 登山" value={topicWord} onChange={e=>setTopicWord(e.target.value)}/></div>
+          <div><Lbl>読み（ひらがな）</Lbl><input style={inp(errors.tr)} placeholder="例: とざん" value={topicReading} onChange={e=>setTopicReading(e.target.value)}/></div>
+        </div>
+        <div style={{marginBottom:"10px"}}><Lbl>意味・説明</Lbl><input style={inp(errors.tm)} placeholder="例: 山の頂上を目指す活動" value={topicMeaning} onChange={e=>setTopicMeaning(e.target.value)}/></div>
+        {topicReading&&<div style={{display:"flex",gap:"8px",flexWrap:"wrap"}}>
+          <Tag>母音: {vowelPreview.toUpperCase()}</Tag>
+          <Tag bg={C.gray}>{countKana(topicReading)}音節</Tag>
+          <Tag bg={dbCount>=GENERATE_TARGET?C.green:dbCount>0?C.yellow:C.gray}>DB: {dbCount}語{dbCount<GENERATE_TARGET&&!isExhausted?` → AI生成: ${GENERATE_TARGET-dbCount}語`:" ✓"}</Tag>
+          {isExhausted&&<Tag bg={C.red}>上限記録済み</Tag>}
+        </div>}
+      </Card>
+
+      <Card>
+        <Lbl>◆ ラウンド数: {rounds}回</Lbl>
+        <input type="range" min="1" max="10" value={rounds} onChange={e=>setRounds(Number(e.target.value))} style={{width:"100%",accentColor:C.yellow,height:"8px"}}/>
+        <div style={{display:"flex",justifyContent:"space-between",fontSize:"0.72rem",marginTop:"4px",color:C.midGray}}>
+          <span>1回</span><span style={{fontFamily:FD,fontSize:"1.6rem",color:C.red}}>{rounds}回</span><span>10回</span>
+        </div>
+      </Card>
+
+      <Card>
+        <Lbl>◆ プレイヤー設定 ({players.length}人)</Lbl>
+        {players.map((p,i)=>(
+          <div key={i} style={{display:"flex",gap:"8px",marginBottom:"8px"}}>
+            <div style={{background:C.yellow,color:C.black,padding:"8px 12px",border:`2px solid ${C.black}`,fontWeight:"700",minWidth:"36px",textAlign:"center"}}>{i+1}</div>
+            <input style={{...inp(errors[`p${i}`]),flex:1}} value={p.name} onChange={e=>updatePlayer(i,e.target.value)} placeholder={`プレイヤー${i+1}`}/>
+            {players.length>1&&<Btn bg={C.red} fg={C.white} size="sm" onClick={()=>removePlayer(i)}>✕</Btn>}
+          </div>
+        ))}
+        {players.length<6&&<Btn bg={C.darkGray} fg={C.yellow} size="sm" onClick={addPlayer}>＋ 追加</Btn>}
+      </Card>
+
+      {generating&&<div style={{background:C.darkGray,border:`3px solid ${C.yellow}`,padding:"14px 18px",marginBottom:"14px"}} className="blink">
+        <div style={{color:C.yellow,fontWeight:"700"}}>🤖 {genLog||"処理中..."}</div>
+      </div>}
+
+      <div style={{display:"flex",gap:"10px",marginBottom:"12px"}}>
+        <div style={{flex:1}}><Btn bg={C.yellow} fg={C.black} sh={C.red} size="lg" full onClick={prepareAndStart} disabled={generating}>{generating?"準備中...":"ゲームスタート →"}</Btn></div>
+        <Btn bg={C.blue} fg={C.white} size="lg" onClick={onWordList} title="単語リスト管理">📚</Btn>
+      </div>
+
+      {(GH_OWNER&&GH_REPO)&&<div style={{marginTop:"4px"}}>
+        <button style={{background:"none",border:"none",color:C.midGray,fontSize:"0.75rem",cursor:"pointer",textDecoration:"underline",padding:"4px 0",fontFamily:FM}} onClick={()=>setShowPat(v=>!v)}>
+          {showPat?"▲ DB書き込み設定を閉じる":"▼ 新単語をDBに保存したい場合（GitHub PAT）"}
+        </button>
+        {showPat&&<div style={{background:C.darkGray,border:`2px solid ${C.midGray}`,padding:"14px 16px",marginTop:"6px"}}>
+          <Lbl>GitHub Personal Access Token（repo スコープ）</Lbl>
+          <div style={{display:"flex",gap:"8px",marginBottom:"8px"}}>
+            <input type="password" style={{...inp(),flex:1}} placeholder="ghp_xxxxxxxxxxxx（任意）" value={patInput} onChange={e=>setPatInput(e.target.value)} autoComplete="off"/>
+            <Btn bg={C.green} fg={C.black} size="sm" onClick={applyPat}>適用</Btn>
+          </div>
+          <div style={{fontSize:"0.72rem",color:C.gray,lineHeight:1.6}}>
+            未入力でもゲームは遊べます。入力するとAIが生成した新単語をGitHubに自動保存します。<br/>
+            取得: GitHub → Settings → Developer settings → Personal access tokens → <strong>repo</strong> スコープ
+          </div>
+          {token&&<div style={{marginTop:"6px",fontSize:"0.75rem",color:C.green,fontWeight:"700"}}>✓ PAT設定済み（書き込み可）</div>}
+        </div>}
+      </div>}
+
+      <div style={{marginTop:"8px",fontSize:"0.72rem",color:C.midGray,textAlign:"right"}}>📚 = 単語リスト管理</div>
+    </div>
+  </div>;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// GameScreen
+// ═══════════════════════════════════════════════════════════════
+function GameScreen({config,onFinish}){
+  const {players,rounds,topic,pool}=config;
+  const isSingle=players.length===1;
+  const [round,setRound]=useState(0);
+  const [scores,setScores]=useState(Object.fromEntries(players.map(p=>[p.name,0])));
+  const [phase,setPhase]=useState("loading");
+  const [current,setCurrent]=useState(null);
+  const [hint,setHint]=useState("");
+  const [selPlayer,setSelPlayer]=useState(isSingle?players[0].name:null);
+  const [answer,setAnswer]=useState("");
+  const [judgement,setJudgement]=useState(null);
+  const [history,setHistory]=useState([]);
+  const [showVowels,setShowVowels]=useState(false);
+  const usedIds=useRef(new Set());
+
+  const pickAnswer=()=>{
+    const avail=pool.filter(w=>!usedIds.current.has(w.id));
+    if(avail.length===0){usedIds.current.clear();return pool[Math.floor(Math.random()*pool.length)];}
+    return avail[Math.floor(Math.random()*avail.length)];
+  };
+
+  const loadRound=async()=>{
+    setPhase("loading");setJudgement(null);setAnswer("");setShowVowels(false);
+    setSelPlayer(isSingle?players[0].name:null);
+    if(pool.length===0){onFinish(scores,history);return;}
+    const ans=pickAnswer();
+    if(ans?.id)usedIds.current.add(ans.id);
+    setCurrent(ans);
+    const h=GEMINI_KEY?await aiGenerateHint(ans.word,ans.reading):ans.meaning;
+    setHint(h);
+    setPhase("question");
+  };
+
+  useEffect(()=>{loadRound();},[]);
+
+  const handleSubmit=()=>{
+    if(!selPlayer||!answer.trim())return;
+    const correct=answer.trim()===current.word||answer.trim()===current.reading;
+    if(correct)setScores(s=>({...s,[selPlayer]:s[selPlayer]+1}));
+    setJudgement(correct?"correct":"wrong");
+    setHistory(h=>[...h,{round:round+1,player:selPlayer,topicWord:topic.word,topicReading:topic.reading,answer:current.word,answerReading:current.reading,userInput:answer.trim(),correct}]);
+    setPhase("result");
+  };
+
+  const handleNext=()=>{
+    const next=round+1;
+    if(next>=rounds)onFinish(scores,history);
+    else{setRound(next);loadRound();}
+  };
+
+  const vQ=getVowels(topic.reading);
+  const vA=current?getVowels(current.reading):"";
+
+  return <div style={{minHeight:"100vh",background:C.black,padding:"24px 16px"}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"18px",borderBottom:`3px solid ${C.yellow}`,paddingBottom:"14px"}}>
+      <div style={{fontFamily:FD,fontSize:"2rem",color:C.yellow}}>同母音GAME</div>
+      <Tag bg={C.red}>ROUND {round+1} / {rounds}</Tag>
+    </div>
+
+    <div style={{display:"flex",gap:"8px",marginBottom:"18px",overflowX:"auto",paddingBottom:"4px"}}>
+      {players.map(p=>(
+        <div key={p.name} style={{background:C.white,border:`3px solid ${C.black}`,padding:"8px 12px",boxShadow:`4px 4px 0 ${C.yellow}`,textAlign:"center",minWidth:"86px",flexShrink:0}}>
+          <div style={{fontSize:"0.7rem",fontWeight:"700",color:C.midGray,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:"76px"}}>{p.name}</div>
+          <div style={{fontFamily:FD,fontSize:"2.2rem",color:C.black}}>{scores[p.name]}</div>
+        </div>
+      ))}
+    </div>
+
+    {phase==="loading"&&<div style={{background:C.darkGray,border:`3px solid ${C.yellow}`,padding:"48px",textAlign:"center"}} className="blink">
+      <div style={{fontFamily:FD,fontSize:"2rem",color:C.yellow}}>AI がヒントを生成中...</div>
+      <div style={{color:C.midGray,marginTop:"8px",fontSize:"0.85rem"}}>Gemini が意味を作っています</div>
+    </div>}
+
+    {(phase==="question"||phase==="answer"||phase==="result")&&current&&<div className="fu">
+      <Card>
+        <Lbl>◆ お題単語</Lbl>
+        <div style={{display:"flex",gap:"16px",alignItems:"center",flexWrap:"wrap"}}>
+          <div>
+            <div style={{fontFamily:FD,fontSize:"3rem",lineHeight:1}}>{topic.word}</div>
+            <div style={{fontSize:"0.85rem",color:C.midGray}}>（{topic.reading}）</div>
+          </div>
+          <div style={{background:C.black,color:C.white,padding:"8px 14px",border:`2px solid ${C.black}`,fontSize:"0.85rem",flex:1}}>{topic.meaning}</div>
+        </div>
+        <div style={{marginTop:"12px",display:"flex",gap:"8px",alignItems:"center",flexWrap:"wrap"}}>
+          <Btn bg={C.gray} fg={C.black} size="sm" onClick={()=>setShowVowels(v=>!v)}>{showVowels?"母音を隠す":"母音を表示"}</Btn>
+          {showVowels&&<Tag>{vQ.toUpperCase()}</Tag>}
+        </div>
+      </Card>
+
+      <div style={{background:C.yellow,color:C.black,border:`3px solid ${C.black}`,boxShadow:`8px 8px 0 ${C.red}`,padding:"22px",marginBottom:"16px"}}>
+        <Lbl>◆ ヒント — 同じ母音を持つ別の言葉とは？</Lbl>
+        <div style={{fontFamily:FD,fontSize:"clamp(1.5rem,4vw,2rem)",letterSpacing:"0.03em"}}>{hint}</div>
+      </div>
+
+      {phase==="question"&&<Btn bg={C.white} fg={C.black} sh={C.red} size="lg" full onClick={()=>setPhase("answer")}>回答する →</Btn>}
+
+      {phase==="answer"&&<Card className="fu">
+        <Lbl>◆ 回答入力</Lbl>
+        {!isSingle&&<div style={{marginBottom:"14px"}}>
+          <Lbl>回答するプレイヤーを選択</Lbl>
+          <div style={{display:"flex",gap:"8px",flexWrap:"wrap"}}>
+            {players.map(p=><Btn key={p.name} bg={selPlayer===p.name?C.blue:C.gray} fg={selPlayer===p.name?C.white:C.black} onClick={()=>setSelPlayer(p.name)}>{p.name}</Btn>)}
+          </div>
+        </div>}
+        <input style={inp()} placeholder="答えを入力（ひらがな・カタカナ・漢字OK）" value={answer} onChange={e=>setAnswer(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleSubmit()} autoFocus/>
+        <div style={{marginTop:"12px"}}><Btn bg={C.yellow} fg={C.black} size="lg" full onClick={handleSubmit} disabled={!selPlayer||!answer.trim()}>判定！</Btn></div>
+      </Card>}
+
+      {phase==="result"&&judgement&&<div style={{background:judgement==="correct"?C.yellow:C.red,color:C.black,border:`3px solid ${C.black}`,boxShadow:`8px 8px 0 ${C.black}`,padding:"22px",marginBottom:"16px"}} className="fu">
+        <div style={{fontFamily:FD,fontSize:"3.5rem",lineHeight:0.9,marginBottom:"10px"}}>{judgement==="correct"?"🎉 CORRECT!":"✗ WRONG..."}</div>
+        {!isSingle&&<div style={{fontWeight:"700",marginBottom:"8px"}}>回答者: {selPlayer}</div>}
+        <div style={{background:C.black,color:C.white,padding:"14px 16px"}}>
+          <div style={{fontSize:"0.72rem",color:C.gray,marginBottom:"4px"}}>正解</div>
+          <div style={{fontFamily:FD,fontSize:"2.5rem"}}>{current.word}</div>
+          <div style={{fontSize:"0.85rem",color:C.gray}}>（{current.reading}）</div>
+          <div style={{fontSize:"0.9rem",marginTop:"4px"}}>{current.meaning}</div>
+          <div style={{marginTop:"10px"}}><Tag>母音: {vA.toUpperCase()} = {vQ.toUpperCase()}</Tag></div>
+        </div>
+        <div style={{marginTop:"16px"}}>
+          <Btn bg={C.black} fg={C.yellow} size="lg" full onClick={handleNext}>{round+1>=rounds?"結果を見る 🏆":`次のラウンドへ (${round+2}/${rounds})`}</Btn>
+        </div>
+      </div>}
+    </div>}
+  </div>;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ResultScreen
+// ═══════════════════════════════════════════════════════════════
+function ResultScreen({scores,history,players,onRestart}){
+  const sorted=[...players].sort((a,b)=>(scores[b.name]||0)-(scores[a.name]||0));
+  const top=scores[sorted[0].name];
+  const winners=sorted.filter(p=>scores[p.name]===top);
+  const medals=["🥇","🥈","🥉"];
+  return <div style={{minHeight:"100vh",background:C.black,padding:"32px 16px"}}>
+    <div style={{maxWidth:"640px",margin:"0 auto"}} className="fu">
+      <div style={{textAlign:"center",marginBottom:"28px"}}>
+        <div style={{fontFamily:FD,fontSize:"clamp(4rem,12vw,8rem)",color:C.yellow,lineHeight:0.88}}>RESULT</div>
+        <div style={{marginTop:"12px"}}>
+          {winners.length===1
+            ?<Tag bg={C.yellow}>🏆 {winners[0].name} の勝利！ {top}点</Tag>
+            :<Tag bg={C.yellow}>🤝 引き分け！ {winners.map(w=>w.name).join(" & ")} {top}点</Tag>}
+        </div>
+      </div>
+      <Card>
+        <Lbl>◆ 最終スコア</Lbl>
+        {sorted.map((p,i)=>(
+          <div key={p.name} style={{display:"flex",alignItems:"center",gap:"12px",padding:"12px",background:[C.yellow,C.gray,"#d8d6ce"][i]||"#e0ded6",border:`2px solid ${C.black}`,marginBottom:"8px"}}>
+            <div style={{fontFamily:FD,fontSize:"2rem",minWidth:"36px"}}>{medals[i]||`${i+1}`}</div>
+            <div style={{flex:1,fontWeight:"700"}}>{p.name}</div>
+            <div style={{fontFamily:FD,fontSize:"2.8rem"}}>{scores[p.name]||0}</div>
+            <div style={{fontSize:"0.8rem"}}>点</div>
+          </div>
+        ))}
+      </Card>
+      <Card>
+        <Lbl>◆ ラウンド履歴</Lbl>
+        {history.map((r,i)=>(
+          <div key={i} style={{background:r.correct?"#b8f0a0":"#ffc0c0",border:`2px solid ${C.black}`,padding:"10px 14px",marginBottom:"8px",fontSize:"0.85rem"}}>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:"4px",flexWrap:"wrap",gap:"4px"}}>
+              <span style={{fontWeight:"700"}}>R{r.round}</span>
+              <span style={{color:C.darkGray}}>{r.player}</span>
+              <span style={{fontWeight:"700"}}>{r.correct?"✓ 正解":"✗ 不正解"}</span>
+            </div>
+            <div>お題: <strong>{r.topicWord}</strong> → 正解: <strong>{r.answer}</strong>（{r.answerReading}）</div>
+            <div style={{color:C.darkGray}}>あなたの回答: {r.userInput}</div>
+          </div>
+        ))}
+      </Card>
+      <Btn bg={C.yellow} fg={C.black} sh={C.red} size="lg" full onClick={onRestart}>もう一度プレイ →</Btn>
+    </div>
+  </div>;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// App — メインルーター
+// ═══════════════════════════════════════════════════════════════
+function App(){
+  const [screen,setScreen]=useState("loading");
+  const [db,setDb]=useState(null);
+  const [sha,setSha]=useState(null);
+  const [token,setToken]=useState(()=>{try{return sessionStorage.getItem("hv_token")||"";}catch{return "";}});
+  const [gameConfig,setGameConfig]=useState(null);
+  const [finalScores,setFinalScores]=useState(null);
+  const [finalHistory,setFinalHistory]=useState(null);
+
+  useEffect(()=>{
+    (async()=>{
+      if(GH_OWNER&&GH_REPO){
+        const {db:d,sha:s}=await fetchDB();
+        setDb(d||JSON.parse(JSON.stringify(FALLBACK_DB)));
+        if(s)setSha(s);
+      } else {
+        setDb(JSON.parse(JSON.stringify(FALLBACK_DB)));
+      }
+      setScreen("title");
+    })();
+  },[]);
+
+  const handleDbUpdate=(newDb,newSha)=>{setDb(newDb);if(newSha)setSha(newSha);};
+  const handleTokenChange=t=>{setToken(t);try{if(t)sessionStorage.setItem("hv_token",t);else sessionStorage.removeItem("hv_token");}catch{}};
+  const handleStart=config=>{setGameConfig(config);setScreen("game");};
+  const handleFinish=(scores,history)=>{setFinalScores(scores);setFinalHistory(history);setScreen("result");};
+  const handleRestart=()=>{setGameConfig(null);setFinalScores(null);setFinalHistory(null);setScreen("title");};
+  const handleWordListSave=async(newDb)=>{
+    const newSha=await saveDB(newDb,sha,token);
+    setDb(newDb);if(newSha)setSha(newSha);
+    return newSha||!GH_OWNER;
+  };
+
+  if(screen==="loading"||!db) return <div style={{minHeight:"100vh",background:C.black,display:"flex",alignItems:"center",justifyContent:"center"}}>
+    <div style={{textAlign:"center"}} className="blink">
+      <div style={{fontFamily:FD,fontSize:"5rem",color:C.yellow}}>同母音</div>
+      <div style={{color:C.midGray,marginTop:"8px",fontSize:"0.9rem"}}>データベースを読み込み中...</div>
+    </div>
+  </div>;
+
+  if(screen==="wordlist") return <WordListScreen db={db} sha={sha} token={token} onSave={handleWordListSave} onBack={()=>setScreen("title")}/>;
+  if(screen==="title") return <TitleScreen onStart={handleStart} onWordList={()=>setScreen("wordlist")} db={db} sha={sha} token={token} onTokenChange={handleTokenChange} onDbUpdate={handleDbUpdate}/>;
+  if(screen==="game") return <GameScreen config={gameConfig} onFinish={handleFinish}/>;
+  if(screen==="result") return <ResultScreen scores={finalScores} history={finalHistory} players={gameConfig.players} onRestart={handleRestart}/>;
+  return null;
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
 </html>

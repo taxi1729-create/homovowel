@@ -1,80 +1,42 @@
 # 同母音異義語ゲーム 🎮
 
-同じ母音パターンを持つ異義語を当てるゲームです。  
-例: **とざん** (登山) → 母音: **oan** → **ロマン** (ろまん) も母音 **oan** ！
+同じ母音パターンを持つ異義語を当てるゲームです。
+例: **とざん**（登山）→ 母音 **oan** → **ロマン**（ろまん）も **oan** ！
+
+## すぐに遊ぶ
+
+### GitHub Pagesで公開する場合
+
+1. このリポジトリを GitHub に push
+2. **Settings → Pages → Source: Deploy from a branch → Branch: main / (root)**
+3. `https://ユーザー名.github.io/リポジトリ名/` にアクセス
+
+**※ GitHub Actions 不要・ビルド不要。index.html を main ブランチに置くだけで動きます。**
+
+### ローカルで動かす場合
+
+`index.html` をブラウザで直接開くだけで動きます。
 
 ---
 
-## セットアップ手順
+## 設定（index.html 先頭を編集）
 
-### 1. このリポジトリをForkまたはテンプレートとして使用
+```javascript
+// Gemini API キー (Google AI Studio で取得)
+// https://aistudio.google.com/
+const GEMINI_KEY = "ここにキーを貼る";
 
-GitHub上で「Fork」または「Use this template」を押してください。
-
-### 2. Gemini API キーを取得
-
-1. [Google AI Studio](https://aistudio.google.com/) にアクセス
-2. 「Get API key」→「Create API key」
-3. キーをコピーしておく
-
-### 3. GitHub Secrets に登録
-
-リポジトリの **Settings → Secrets and variables → Actions → New repository secret**
-
-| Name | Value |
-|------|-------|
-| `VITE_GEMINI_KEY` | 手順2で取得したGemini APIキー |
-
-### 4. GitHub Pages を有効化
-
-リポジトリの **Settings → Pages**
-
-- Source: **GitHub Actions** を選択
-
-### 5. デプロイ実行
-
-`main` ブランチに push するか、Actions タブから手動で `Deploy to GitHub Pages` を実行。
-
----
-
-## ゲームのプレイ方法
-
-1. デプロイ後のURLにアクセス
-2. **GitHub Personal Access Token** を入力（`repo` スコープ必要）
-   - 取得: GitHub → Settings → Developer settings → Personal access tokens
-   - トークンはブラウザのセッションにのみ保存され、外部に送信されません
-3. お題単語を入力してゲームスタート！
-
-> **オフラインモード**: トークンなしでもゲームは遊べます（データ保存なし）
-
----
-
-## データベース管理
-
-- 単語データは **`database.json`** に保存されます（同リポジトリ内）
-- ゲーム中に新しい同母音語をAIが生成すると自動保存されます
-- ゲーム画面の 📚 ボタンから単語の検索・編集・追加ができます
-
----
-
-## ローカル開発
-
-```bash
-# .env.local を作成
-echo "VITE_GEMINI_KEY=your_key_here" > .env.local
-echo "VITE_GITHUB_OWNER=your_username" >> .env.local
-echo "VITE_GITHUB_REPO=your_repo_name" >> .env.local
-
-npm install
-npm run dev
+// GitHub DB設定（任意 — 単語を自動保存したい場合のみ）
+const GH_OWNER = "GitHubユーザー名";
+const GH_REPO  = "リポジトリ名";
 ```
 
+- **GEMINI_KEY** だけ設定すれば AI によるヒント生成・同母音語自動生成が動きます
+- GitHub DB設定は任意。未設定でも内蔵データベースで遊べます
+
 ---
 
-## 技術スタック
+## 単語データベース
 
-- **フロントエンド**: React + Vite
-- **AI**: Gemini 2.0 Flash (Google AI Studio)
-- **DB**: GitHub REST API (database.json)
-- **ホスティング**: GitHub Pages
-- **CI/CD**: GitHub Actions
+- ゲーム内の 📚 ボタンから単語の検索・編集・追加ができます
+- GitHub PAT（repo スコープ）を入力すると、AIが生成した新単語を `database.json` に自動保存します
