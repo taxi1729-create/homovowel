@@ -207,7 +207,7 @@ async function saveDB(db,sha){
 async function callGemini(prompt,maxTokens=2000){
   const key=lsGet(LS.GEMINI_KEY);
   if(!key) throw new Error("Gemini APIキーが未設定です");
-  const url=`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${key}`;
+  const url=`https://generativelanguage.googleapis.com/v1/models/${GEMINI_MODEL}:generateContent?key=${key}`;
   
   const res=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},
     body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{maxOutputTokens:maxTokens,temperature:0.7}})});
